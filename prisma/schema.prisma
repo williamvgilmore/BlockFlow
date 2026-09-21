@@ -1,0 +1,51 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Product {
+  id             String   @id
+  lastObservedAt DateTime
+  buyPrice       Decimal  @db.Decimal(20, 8)
+  sellPrice      Decimal  @db.Decimal(20, 8)
+  buyVolume      BigInt
+  sellVolume     BigInt
+  buyMovingWeek  BigInt
+  sellMovingWeek BigInt
+  buyOrders      Int
+  sellOrders     Int
+  snapshots      ProductSnapshot[]
+}
+
+model ProductSnapshot {
+  id             String   @id @default(cuid())
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  observedAt     DateTime
+  buyPrice       Decimal  @db.Decimal(20, 8)
+  sellPrice      Decimal  @db.Decimal(20, 8)
+  buyVolume      BigInt
+  sellVolume     BigInt
+  buyMovingWeek  BigInt
+  sellMovingWeek BigInt
+  buyOrders      Int
+  sellOrders     Int
+
+  @@unique([productId, observedAt])
+  @@index([observedAt])
+  @@index([productId, observedAt(sort: Desc)])
+}
+
+model IngestRun {
+  id           String    @id @default(cuid())
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  lastUpdated  DateTime?
+  productCount Int?
+  status       String
+  error        String?
+}
