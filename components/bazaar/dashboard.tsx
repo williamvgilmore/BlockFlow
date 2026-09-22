@@ -1,11 +1,15 @@
 import { CashFlowTreemap } from "@/components/bazaar/cash-flow-treemap";
+import { MoversChart } from "@/components/bazaar/movers-chart";
 import { RankedBarChart } from "@/components/bazaar/ranked-bar-chart";
 import { RankedTable } from "@/components/bazaar/ranked-table";
-import { formatTimestamp, formatVolume } from "@/lib/bazaar/format";
+import { TimeSeriesChart } from "@/components/bazaar/time-series-chart";
+import { formatPct, formatProductId, formatTimestamp, formatVolume } from "@/lib/bazaar/format";
+import type { MarketHistory } from "@/lib/bazaar/history";
 import type { BazaarOverview } from "@/lib/bazaar/overview";
 
 type DashboardProps = {
   overview: BazaarOverview;
+  marketHistory: MarketHistory;
 };
 
 function Kpi({ label, value }: { label: string; value: string }) {
@@ -21,7 +25,37 @@ function Kpi({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function Dashboard({ overview }: DashboardProps) {
+function MoversTable({ rows }: { rows: MarketHistory["gainers"] }) {
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full min-w-[28rem] text-left text-sm">
+        <thead>
+          <tr className="border-b border-zinc-200 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+            <th className="py-2 pr-3">Product</th>
+            <th className="py-2 pr-3">Change</th>
+            <th className="py-2 pr-3">Buy now</th>
+            <th className="py-2">Weekly vol</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr
+              key={row.id}
+              className="border-b border-zinc-100 text-zinc-800 last:border-0 dark:border-zinc-800 dark:text-zinc-200"
+            >
+              <td className="py-2 pr-3 font-medium">{formatProductId(row.id)}</td>
+              <td className="py-2 pr-3 tabular-nums">{formatPct(row.changePct)}</td>
+              <td className="py-2 pr-3 tabular-nums">{row.buyPrice.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+              <td className="py-2 tabular-nums">{formatVolume(row.weeklyVolume)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function Dashboard({ overview, marketHistory }: DashboardProps) {
   return (
     <div className="space-y-8">
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -58,6 +92,58 @@ export function Dashboard({ overview }: DashboardProps) {
         <div className="mt-4">
           <CashFlowTreemap data={overview.cashFlowLeaves} />
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+          Market cash flow over time
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          Estimated weekly coins traded at each stored bazaar tick (weekly units
+          × prices at that tick).
+        </p>
+        <div className="mt-4">
+          <TimeSeriesChart
+            data={marketHistory.cashFlowSeries}
+            format="volume"
+            heightClassName="h-72"
+            series={[
+              { dataKey: "cashFlow", name: "Weekly cash flow", color: "#059669" },
+            ]}
+          />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+          Instant-buy movers
+        </h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          Largest liquid buy-price changes in the {marketHistory.moversWindowLabel},
+          among items with weekly volume of at least 10k.
+        </p>
+        {marketHistory.gainers.length === 0 && marketHistory.losers.length === 0 ? (
+          <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+            Not enough snapshot history yet to rank movers.
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-6 xl:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                Gainers
+              </h3>
+              <MoversChart rows={marketHistory.gainers} />
+              <MoversTable rows={marketHistory.gainers} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                Losers
+              </h3>
+              <MoversChart rows={marketHistory.losers} />
+              <MoversTable rows={marketHistory.losers} />
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">

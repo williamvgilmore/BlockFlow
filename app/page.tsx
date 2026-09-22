@@ -1,10 +1,14 @@
 ﻿import { Dashboard } from "@/components/bazaar/dashboard";
+import { getMarketHistory } from "@/lib/bazaar/history";
 import { getBazaarOverview } from "@/lib/bazaar/overview";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const overview = await getBazaarOverview();
+  const [overview, marketHistory] = await Promise.all([
+    getBazaarOverview(),
+    getMarketHistory(),
+  ]);
 
   return (
     <div className="min-h-screen bg-zinc-50 px-6 py-10 font-sans dark:bg-zinc-950">
@@ -29,7 +33,7 @@ export default async function Home() {
           </p>
         ) : (
           <div className="mt-8">
-            <Dashboard overview={overview} />
+            <Dashboard overview={overview} marketHistory={marketHistory} />
           </div>
         )}
       </main>
