@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
 import type { TreemapNode } from "recharts";
+import { TimeSeriesChart } from "@/components/bazaar/time-series-chart";
 import { formatCoins, formatPct, formatVolume } from "@/lib/bazaar/format";
+import type { ProductHistoryPoint } from "@/lib/bazaar/history";
 import type { CashFlowLeaf } from "@/lib/bazaar/overview";
 
 type TooltipPayload = {
@@ -32,6 +34,8 @@ function LeafDialog({
   leaf: CashFlowLeaf;
   onClose: () => void;
 }) {
+  const [history, setHistory] = useState<ProductHistoryPoint[] | null>(null);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -43,16 +47,47 @@ function LeafDialog({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    if (leaf.isOther) {
+      setHistory([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    setHistory(null);
+
+    void fetch(`/api/bazaar/history?productId=${encodeURIComponent(leaf.id)}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("history request failed");
+        }
+        return (await response.json()) as ProductHistoryPoint[];
+      })
+      .then((points) => {
+        setHistory(Array.isArray(points) ? points : []);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+        setHistory([]);
+      });
+
+    return () => controller.abort();
+  }, [leaf.id, leaf.isOther]);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/50 px-4 py-6"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="leaf-dialog-title"
-        className="w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
+        className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
@@ -105,6 +140,50 @@ function LeafDialog({
             <Metric label="Sell volume" value={formatVolume(leaf.sellVolume)} />
           </div>
         )}
+
+        {!leaf.isOther ? (
+          <div className="mt-6 space-y-5">
+            <div>
+              <h4 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                Instant buy / sell
+              </h4>
+              {history === null ? (
+                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                  Loading price history…
+                </p>
+              ) : (
+                <div className="mt-2">
+                  <TimeSeriesChart
+                    data={history}
+                    format="coins"
+                    heightClassName="h-56"
+                    series={[
+                      { dataKey: "buyPrice", name: "Instant buy", color: "#059669" },
+                      { dataKey: "sellPrice", name: "Instant sell", color: "#0f766e" },
+                    ]}
+                  />
+                </div>
+              )}
+            </div>
+            {history && history.length >= 2 ? (
+              <div>
+                <h4 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  Spread %
+                </h4>
+                <div className="mt-2">
+                  <TimeSeriesChart
+                    data={history}
+                    format="percent"
+                    heightClassName="h-44"
+                    series={[
+                      { dataKey: "spreadPct", name: "Spread %", color: "#a1a1aa" },
+                    ]}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -214,7 +293,6 @@ function CashFlowCell(node: TreemapNode) {
           pointerEvents="none"
         >
           <div
-            xmlns="http://www.w3.org/1999/xhtml"
             style={{
               width: "100%",
               height: "100%",
